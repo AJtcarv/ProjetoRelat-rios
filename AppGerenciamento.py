@@ -78,10 +78,9 @@ def main(page: ft.Page):
         mostrar_snack("Funcionário e atividades removidos.")
 
     def abrir_edicao(func_dados):
-        # func_dados: (id, nome, cpf, cargo, depto, salario, data_adm)
-        edit_id = func_dados[0]
+        print(f"Botão Editar clicado para o ID: {func_dados[0]}") # Verificação no terminal
         
-        # Campos de edição com os dados atuais
+        edit_id = func_dados[0]
         tf_edit_nome = ft.TextField(label="Nome Completo", value=func_dados[1])
         tf_edit_cpf = ft.TextField(label="CPF", value=func_dados[2])
         tf_edit_cargo = ft.TextField(label="Cargo", value=func_dados[3])
@@ -93,33 +92,23 @@ def main(page: ft.Page):
                 conn = conectar_db()
                 cursor = conn.cursor()
                 cursor.execute("""
-                    UPDATE funcionarios 
-                    SET nome=?, cpf=?, cargo=?, departamento=?, salario=? 
-                    WHERE id=?
-                """, (
-                    tf_edit_nome.value, 
-                    tf_edit_cpf.value, 
-                    tf_edit_cargo.value, 
-                    tf_edit_depto.value, 
-                    float(tf_edit_salario.value or 0), 
-                    edit_id
-                ))
+                    UPDATE funcionarios SET nome=?, cpf=?, cargo=?, departamento=?, salario=? WHERE id=?
+                """, (tf_edit_nome.value, tf_edit_cpf.value, tf_edit_cargo.value, 
+                      tf_edit_depto.value, float(tf_edit_salario.value or 0), edit_id))
                 conn.commit()
                 conn.close()
                 
-                # Comando para fechar a janela em versões novas e antigas
+                # Fecha o diálogo de qualquer forma possível
                 if hasattr(page, "close"):
                     page.close(dlg_editar)
-                else:
-                    dlg_editar.open = False
+                dlg_editar.open = False
                 
                 carregar_lista_gerenciamento()
                 mostrar_snack("Cadastro atualizado!")
                 page.update()
             except Exception as ex:
-                mostrar_snack(f"Erro ao salvar: {ex}")
+                mostrar_snack(f"Erro: {ex}")
 
-        # Construção da Janela de Edição (AlertDialog)
         dlg_editar = ft.AlertDialog(
             title=ft.Text("Editar Funcionário"),
             content=ft.Container(
@@ -128,21 +117,28 @@ def main(page: ft.Page):
                     ft.Row([tf_edit_cpf, tf_edit_salario]),
                     ft.Row([tf_edit_cargo, tf_edit_depto]),
                 ], tight=True, spacing=10),
-                width=500
+                width=500,
             ),
             actions=[
                 ft.TextButton("Cancelar", on_click=lambda _: page.close(dlg_editar) if hasattr(page, "close") else setattr(dlg_editar, "open", False) or page.update()),
-                ft.ElevatedButton("Salvar", bgcolor="blue", color="white", on_click=salvar_edicao)
+                ft.ElevatedButton("Confirmar", bgcolor="blue", color="white", on_click=salvar_edicao)
             ],
         )
 
-        # COMANDO CRÍTICO: Abre a janela de forma compatível
+        # --- LÓGICA DE ABERTURA FORÇADA ---
+        # 1. Adiciona o diálogo ao overlay da página (necessário em versões novas)
+        if dlg_editar not in page.overlay:
+            page.overlay.append(dlg_editar)
+        
+        # 2. Tenta abrir usando o método moderno
         if hasattr(page, "open"):
-            page.open(dlg_editar) # Padrão Flet Novo
+            page.open(dlg_editar)
         else:
-            page.dialog = dlg_editar
-            dlg_editar.open = True # Padrão Flet Antigo
+            # 3. Fallback para método antigo
+            dlg_editar.open = True
             page.update()
+        
+        print("Comando de abertura enviado.") # Verificação no terminal
 
     # --- 1. AJUSTE NO COMPONENTE DE LISTA ---
     # Usar ListView em vez de Column para evitar bugs de renderização e expand
@@ -155,36 +151,42 @@ def main(page: ft.Page):
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM funcionarios ORDER BY nome")
         
-        for row in cursor.fetchall():
-            # Esta linha é vital: cria uma cópia local dos dados para o botão
-            dados_do_funcionario = row 
+        registros = cursor.fetchall()
+        for row in registros:
+            # Captura de dados fixa para esta iteração
+            dados_atuais = list(row) 
 
             lista_gerenciar_func.controls.append(
                 ft.Container(
                     content=ft.Row([
                         ft.Column([
-                            ft.Text(row[1], size=16, weight="bold"),
-                            ft.Text(f"{row[3]} | {row[4]}", size=12, color="white54"),
+                            ft.Text(dados_atuais[1], size=16, weight="bold"),
+                            ft.Text(f"{dados_atuais[3]} | {dados_atuais[4]}", size=12, color="white54"),
                         ], expand=True),
                         
-                        # Botão que chama a janela de edição
                         ft.ElevatedButton(
                             "Editar",
                             icon="edit",
-                            on_click=lambda _, d=dados_do_funcionario: abrir_edicao(d)
+                            bgcolor="blue900",
+                            color="white",
+                            # Aqui passamos a lista 'dados_atuais' diretamente para a função
+                            on_click=lambda e, d=dados_atuais: abrir_edicao(d)
                         ),
                         
                         ft.ElevatedButton(
                             "Excluir",
                             icon="delete",
                             bgcolor="red900",
-                            on_click=lambda _, id=dados_do_funcionario[0]: deletar_funcionario(id)
+                            color="white",
+                            on_click=lambda e, id=dados_atuais[0]: deletar_funcionario(id)
                         ),
                     ]),
-                    padding=10, bgcolor="white10", border_radius=10
+                    padding=15, bgcolor="white10", border_radius=10
                 )
             )
         conn.close()
+        if not registros:
+            lista_gerenciar_func.controls.append(ft.Text("Nenhum funcionário cadastrado."))
         page.update()
 
     # --- 3. DEFINIÇÃO DA VIEW GERENCIAR ---
