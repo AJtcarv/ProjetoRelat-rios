@@ -208,31 +208,60 @@ def main(page: ft.Page):
         hoje = datetime.now().strftime("%d/%m/%Y")
         conn = conectar_db()
         cursor = conn.cursor()
-        query = '''SELECT f.nome, a.hora, a.descricao FROM atividades_func a 
-                   JOIN funcionarios f ON a.id_func = f.id WHERE a.data = ? ORDER BY a.hora ASC'''
+        
+        # CRÍTICO: Ordenamos primeiro por NOME e depois por HORA para permitir o agrupamento
+        query = '''SELECT f.nome, a.hora, a.descricao 
+                   FROM atividades_func a 
+                   JOIN funcionarios f ON a.id_func = f.id 
+                   WHERE a.data = ? 
+                   ORDER BY f.nome ASC, a.hora ASC'''
+        
         cursor.execute(query, (hoje,))
         dados = cursor.fetchall()
         conn.close()
         
-        if not dados: return mostrar_snack("Sem atividades para hoje!")
+        if not dados: 
+            return mostrar_snack("Sem atividades para hoje!")
 
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(190, 10, f"Relatorio Diario - {hoje}", ln=True, align="C")
-        pdf.ln(5)
-        for r in dados:
-            pdf.set_fill_color(240, 240, 240)
-            pdf.set_font("Arial", "B", 10)
-            pdf.cell(190, 8, f"[{r[1]}] {r[0]}", fill=True, ln=True, border='T')
-            pdf.set_font("Arial", "", 10)
-            pdf.multi_cell(190, 7, r[2], border='B')
-            pdf.ln(2)
         
-        nome_arquivo = f"Relatorio_{hoje.replace('/', '_')}.pdf"
+        # Título do Relatório
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(190, 10, f"Relatorio de Atividades - {hoje}", ln=True, align="C")
+        pdf.ln(10)
+
+        ultimo_funcionario = None
+
+        for r in dados:
+            nome_func = r[0]
+            hora = r[1]
+            descricao = r[2]
+
+            # Se o nome mudar, criamos um novo cabeçalho de grupo para o funcionário
+            if nome_func != ultimo_funcionario:
+                pdf.ln(5)
+                pdf.set_fill_color(200, 220, 255) # Azul claro para o destaque do nome
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(190, 10, f" Funcionario: {nome_func.upper()}", fill=True, ln=True)
+                ultimo_funcionario = nome_func
+                pdf.ln(2)
+
+            # Detalhes da Atividade sob o funcionário
+            pdf.set_font("Arial", "B", 10)
+            pdf.set_text_color(100, 100, 100) # Cinza para a hora
+            pdf.cell(190, 7, f"Horario: {hora}", ln=True)
+            
+            pdf.set_text_color(0, 0, 0) # Volta para preto para a descrição
+            pdf.set_font("Arial", "", 10)
+            pdf.multi_cell(190, 7, descricao, border='B')
+            pdf.ln(2)
+
+        # Salva e abre o arquivo
+        nome_arquivo = f"Relatorio_Agrupado_{hoje.replace('/', '_')}.pdf"
         pdf.output(nome_arquivo)
         os.startfile(nome_arquivo)
-
+        mostrar_snack("Relatório agrupado gerado com sucesso!")
     def criar_bloco_horizontal(id_atv, nome, hora, desc, data_ref, eh_hist):
         return ft.Container(
             content=ft.Row([
