@@ -117,7 +117,7 @@ def main(page: ft.Page):
                     ft.Row([tf_edit_cpf, tf_edit_salario]),
                     ft.Row([tf_edit_cargo, tf_edit_depto]),
                 ], tight=True, spacing=10),
-                width=500,
+                width=600,
             ),
             actions=[
                 ft.TextButton("Cancelar", on_click=lambda _: page.close(dlg_editar) if hasattr(page, "close") else setattr(dlg_editar, "open", False) or page.update()),
